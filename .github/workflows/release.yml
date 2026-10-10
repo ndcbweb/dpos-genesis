@@ -1,0 +1,32 @@
+name: Build and publish image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: docker build -t nadcab/dpos-genesis:latest .
+
+      - run: docker save nadcab/dpos-genesis:latest | gzip -1 > dpos-genesis.tar.gz && ls -lh dpos-genesis.tar.gz
+
+      - name: Publish to the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view latest >/dev/null 2>&1 || \
+            gh release create latest --title "Latest build" --notes "Rolling build of main."
+          gh release upload latest dpos-genesis.tar.gz --clobber
+          gh release edit latest --notes "Rolling build of main at ${GITHUB_SHA::7}. Load with: curl -fsSL <asset> | docker load"
